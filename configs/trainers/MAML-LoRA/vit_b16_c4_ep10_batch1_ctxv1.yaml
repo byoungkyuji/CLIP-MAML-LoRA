@@ -29,7 +29,12 @@ MODEL:
     NAME: "ViT-B/16"
 
 TRAINER:
-  COCOOP:
-    N_CTX: 4
-    CTX_INIT: "a photo of a"
+  LoRA:
     PREC: "fp16"
+    POSITION: "both"
+    ENCODER: "both"
+    PARAMS: ["q","k","v"]
+    RANK: 2
+    ALPHA: 1
+    DROPOUT_RATE: 0.25
+    
