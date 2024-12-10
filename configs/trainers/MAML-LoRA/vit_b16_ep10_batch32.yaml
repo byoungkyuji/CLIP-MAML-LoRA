@@ -1,6 +1,6 @@
 DATALOADER:
   TRAIN_X:
-    BATCH_SIZE: 1
+    BATCH_SIZE: 32
   TEST:
     BATCH_SIZE: 100
   NUM_WORKERS: 8
@@ -37,4 +37,4 @@ TRAINER:
     RANK: 2
     ALPHA: 1
     DROPOUT_RATE: 0.25
-    
+    CTX_INIT: ['a photo of a {}.']

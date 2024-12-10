@@ -83,27 +83,6 @@ def lora_state_dict(model: nn.Module, bias: str = 'none') -> Dict[str, torch.Ten
         raise NotImplementedError
 
 
-def get_lora_parameters(model, bias='none'):
-    params = []
-    for name, param in model.named_parameters():
-        if bias == 'none':
-            if 'lora_' in name:
-                params.append(param)
-        elif bias == 'all':
-            if 'lora_' in name or 'bias' in name:
-                params.append(param)
-        elif bias == 'lora_only':
-            if 'lora_' in name:
-                params.append(param)
-                bias_name = name.split('lora_')[0] + 'bias'
-                if bias_name in model.state_dict():
-                    bias_param = dict(model.named_parameters())[bias_name]
-                    params.append(bias_param)
-        else:
-            raise NotImplementedError
-    return params
-
-
 def apply_lora(args, clip_model):
     list_lora_layers = []
     if args.encoder == 'text' or args.encoder == 'both':
