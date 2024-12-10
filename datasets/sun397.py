@@ -9,7 +9,7 @@ from .oxford_pets import OxfordPets
 
 @DATASET_REGISTRY.register()
 class SUN397(DatasetBase):
-
+    template = ['a photo of a {}.']
     dataset_dir = "sun397"
 
     def __init__(self, cfg):

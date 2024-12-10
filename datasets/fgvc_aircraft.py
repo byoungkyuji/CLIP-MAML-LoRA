@@ -9,9 +9,9 @@ from .oxford_pets import OxfordPets
 
 @DATASET_REGISTRY.register()
 class FGVCAircraft(DatasetBase):
-
+    template = ['a photo of a {}.']
     dataset_dir = "fgvc_aircraft"
-
+    
     def __init__(self, cfg):
         root = os.path.abspath(os.path.expanduser(cfg.DATASET.ROOT))
         self.dataset_dir = os.path.join(root, self.dataset_dir)

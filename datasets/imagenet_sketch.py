@@ -12,7 +12,7 @@ class ImageNetSketch(DatasetBase):
 
     This dataset is used for testing only.
     """
-
+    template = ['a photo of a {}.']
     dataset_dir = "imagenet-sketch"
 
     def __init__(self, cfg):

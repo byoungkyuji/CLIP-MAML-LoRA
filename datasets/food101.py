@@ -10,7 +10,7 @@ from .dtd import DescribableTextures as DTD
 
 @DATASET_REGISTRY.register()
 class Food101(DatasetBase):
-
+    template = ['a photo of a {}.']
     dataset_dir = "food-101"
 
     def __init__(self, cfg):

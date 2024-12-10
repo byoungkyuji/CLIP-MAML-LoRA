@@ -10,7 +10,7 @@ from .oxford_pets import OxfordPets
 
 @DATASET_REGISTRY.register()
 class DescribableTextures(DatasetBase):
-
+    template = ['a photo of a {}.']
     dataset_dir = "dtd"
 
     def __init__(self, cfg):

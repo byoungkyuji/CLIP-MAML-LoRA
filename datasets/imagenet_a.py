@@ -14,7 +14,7 @@ class ImageNetA(DatasetBase):
 
     This dataset is used for testing only.
     """
-
+    template = ['a photo of a {}.']
     dataset_dir = "imagenet-adversarial"
 
     def __init__(self, cfg):

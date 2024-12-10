@@ -23,7 +23,7 @@ NEW_CNAMES = {
 
 @DATASET_REGISTRY.register()
 class EuroSAT(DatasetBase):
-
+    template = ['a photo of a {}.']
     dataset_dir = "eurosat"
 
     def __init__(self, cfg):

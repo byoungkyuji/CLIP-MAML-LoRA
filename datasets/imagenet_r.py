@@ -14,7 +14,7 @@ class ImageNetR(DatasetBase):
 
     This dataset is used for testing only.
     """
-
+    template = ['a photo of a {}.']
     dataset_dir = "imagenet-rendition"
 
     def __init__(self, cfg):

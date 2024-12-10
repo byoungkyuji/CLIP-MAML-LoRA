@@ -10,7 +10,7 @@ from .oxford_pets import OxfordPets
 
 @DATASET_REGISTRY.register()
 class UCF101(DatasetBase):
-
+    template = ['a photo of a {}.']
     dataset_dir = "ucf101"
 
     def __init__(self, cfg):

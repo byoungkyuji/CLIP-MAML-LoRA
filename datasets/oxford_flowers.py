@@ -12,7 +12,7 @@ from .oxford_pets import OxfordPets
 
 @DATASET_REGISTRY.register()
 class OxfordFlowers(DatasetBase):
-
+    template = ['a photo of a {}.']
     dataset_dir = "oxford_flowers"
 
     def __init__(self, cfg):

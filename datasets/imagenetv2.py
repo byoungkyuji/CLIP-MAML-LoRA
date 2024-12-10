@@ -12,7 +12,7 @@ class ImageNetV2(DatasetBase):
 
     This dataset is used for testing only.
     """
-
+    template = ['a photo of a {}.']
     dataset_dir = "imagenetv2"
 
     def __init__(self, cfg):

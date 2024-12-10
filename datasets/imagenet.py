@@ -10,7 +10,7 @@ from .oxford_pets import OxfordPets
 
 @DATASET_REGISTRY.register()
 class ImageNet(DatasetBase):
-
+    template = ['a photo of a {}.']
     dataset_dir = "imagenet"
 
     def __init__(self, cfg):
