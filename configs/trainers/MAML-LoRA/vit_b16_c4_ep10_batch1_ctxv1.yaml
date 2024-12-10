@@ -31,7 +31,7 @@ MODEL:
 TRAINER:
   LoRA:
     PREC: "fp16"
-    POSITION: "both"
+    POSITION: "all"
     ENCODER: "both"
     PARAMS: ["q","k","v"]
     RANK: 2
