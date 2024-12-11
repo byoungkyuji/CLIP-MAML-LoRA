@@ -83,10 +83,10 @@ def lora_state_dict(model: nn.Module, bias: str = 'none') -> Dict[str, torch.Ten
         raise NotImplementedError
 
 
-def apply_lora(args, clip_model):
+def apply_lora(cfg, clip_model):
     list_lora_layers = []
-    if args.encoder == 'text' or args.encoder == 'both':
-        indices = INDEX_POSITIONS_TEXT[args.position]
+    if cfg.TRAINER.LoRA.ENCODER == 'text' or cfg.TRAINER.LoRA.ENCODER == 'both':
+        indices = INDEX_POSITIONS_TEXT[cfg.TRAINER.LoRA.POSITION]
         text_encoder = clip_model.transformer
         for i, block in enumerate(text_encoder.resblocks):
             print(f"Residual Attention Block {i}: {block}")
@@ -94,12 +94,12 @@ def apply_lora(args, clip_model):
                 for name, submodule in block.named_children():
                     if isinstance(submodule, nn.MultiheadAttention):
                         new_multi_head_lora = PlainMultiheadAttentionLoRA(
-                            submodule, enable_lora=args.params, r=args.r, lora_alpha=args.alpha, dropout_rate=args.dropout_rate)
+                            submodule, enable_lora=cfg.TRAINER.LoRA.PARAMS, r=cfg.TRAINER.LoRA.RANK, lora_alpha=cfg.TRAINER.LoRA.ALPHA, dropout_rate=cfg.TRAINER.LoRA.DROPOUT_RATE)
                         setattr(block, name, new_multi_head_lora)
                         list_lora_layers.append(new_multi_head_lora)
 
-    if args.encoder == 'vision' or args.encoder == 'both':
-        indices = INDEX_POSITIONS_VISION[args.backbone][args.position]
+    if cfg.TRAINER.LoRA.ENCODER == 'vision' or cfg.TRAINER.LoRA.ENCODER == 'both':
+        indices = INDEX_POSITIONS_VISION[cfg.MODEL.BACKBONE.NAME][cfg.TRAINER.LoRA.POSITION]
         vision_encoder = clip_model.visual.transformer
         for i, block in enumerate(vision_encoder.resblocks):
             print(f"Residual Attention Block {i}: {block}")
@@ -107,10 +107,10 @@ def apply_lora(args, clip_model):
                 for name, submodule in block.named_children():
                     if isinstance(submodule, nn.MultiheadAttention):
                         new_multi_head_lora = PlainMultiheadAttentionLoRA(
-                            submodule, enable_lora=args.params, r=args.r, lora_alpha=args.alpha, dropout_rate=args.dropout_rate)
+                            submodule, enable_lora=cfg.TRAINER.LoRA.PARAMS, r=cfg.TRAINER.LoRA.RANK, lora_alpha=cfg.TRAINER.LoRA.ALPHA, dropout_rate=cfg.TRAINER.LoRA.DROPOUT_RATE)
                         setattr(block, name, new_multi_head_lora)
                         list_lora_layers.append(new_multi_head_lora)
-    return list_lora_layers
+    return nn.ModuleList(list_lora_layers)
 
 
 def save_lora(args, list_lora_layers):

@@ -15,9 +15,7 @@ from dassl.optim import build_optimizer, build_lr_scheduler
 from clip import clip
 from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 
-from utils import *
-
-from loralib.utils import mark_only_lora_as_trainable, apply_lora, get_lora_parameters, lora_state_dict, save_lora, load_lora
+from loralib.utils import mark_only_lora_as_trainable, apply_lora, lora_state_dict, save_lora, load_lora
 from loralib import layers as lora_layers
 
 from typing import Dict
@@ -70,13 +68,13 @@ class LoRACLIP(nn.Module):
     def __init__(self, cfg, classnames, clip_model):
         super().__init__()
         self.classnames = classnames
-        self.lora_layers = nn.ModuleList(apply_lora(cfg,clip_model))
-        self.lora_encoder = cfg.TRAINER.LORA.ENCODER
+        self.list_lora_layers = apply_lora(cfg,clip_model)
+        self.lora_encoder = cfg.TRAINER.LoRA.ENCODER
         self.image_encoder = clip_model.visual
         self.text_encoder = clip_model.transformer
         self.logit_scale = clip_model.logit_scale
         self.dtype = clip_model.dtype
-        self.template = cfg.TRAINER.COOP.CTX_INIT
+        self.template = cfg.TRAINER.LoRA.CTX_INIT
         self.clip_model = clip_model
         self.logit_scale = clip_model.logit_scale
             
@@ -125,7 +123,7 @@ class LoRA(TrainerX):
     """
 
     def check_cfg(self, cfg):
-        assert cfg.TRAINER.LORA.PREC in ["fp16", "fp32", "amp"]
+        assert cfg.TRAINER.LoRA.PREC in ["fp16", "fp32", "amp"]
 
     def build_model(self):
         cfg = self.cfg
@@ -134,7 +132,7 @@ class LoRA(TrainerX):
         print(f"Loading CLIP (backbone: {cfg.MODEL.BACKBONE.NAME})")
         clip_model = load_clip_to_cpu(cfg)
         
-        if cfg.TRAINER.LORA.PREC == "fp32" or cfg.TRAINER.LORA.PREC == "amp":
+        if cfg.TRAINER.LoRA.PREC == "fp32" or cfg.TRAINER.LoRA.PREC == "amp":
             # CLIP's default precision is fp16
             clip_model.float()
 
@@ -152,17 +150,19 @@ class LoRA(TrainerX):
         print(f"Parameters to be updated: {enabled}")
         
         if cfg.MODEL.INIT_WEIGHTS:
-            load_pretrained_weights(self.model.prompt_learner, cfg.MODEL.INIT_WEIGHTS)
-
-        self.optim = build_optimizer(self.model.get_lora_parameters(), cfg.OPTIM)
+            load_pretrained_weights(self.model.list_lora_layers, cfg.MODEL.INIT_WEIGHTS)
+        
+        self.model.to(self.device)
+        self.optim = build_optimizer(self.model.list_lora_layers, cfg.OPTIM)
         self.sched = build_lr_scheduler(self.optim, cfg.OPTIM)
-        self.register_model("LoRA", self.model.lora_layers, self.optim, self.sched)
+        self.register_model("LoRA_layers", self.model.list_lora_layers, self.optim, self.sched)
 
-        self.scaler = GradScaler() if cfg.TRAINER.LORA.PREC == "amp" else None
+        self.scaler = GradScaler() if cfg.TRAINER.LoRA.PREC == "amp" else None
 
         # Note that multi-gpu training could be slow because CLIP's size is
         # big, which slows down the copy operation in DataParallel
         device_count = torch.cuda.device_count()
+        #device_ids = [i for i in range(2,8)]
         if device_count > 1:
             print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
             self.model = nn.DataParallel(self.model)
@@ -170,7 +170,7 @@ class LoRA(TrainerX):
     def forward_backward(self, batch):
         image, label = self.parse_batch_train(batch)
         
-        prec = self.cfg.TRAINER.LORA.PREC
+        prec = self.cfg.TRAINER.LoRA.PREC
         if prec == "amp":
             with autocast():
                 output = self.model(image)
@@ -200,66 +200,3 @@ class LoRA(TrainerX):
         input = input.to(self.device)
         label = label.to(self.device)
         return input, label
-    # TODO: modify load_model
-    def load_model(self, directory, epoch=None):
-        if not directory:
-            print("Note that load_model() is skipped as no pretrained model is given")
-            return
-
-        names = self.get_model_names()
-
-        # By default, the best model is loaded
-        model_file = "model-best.pth.tar"
-
-        if epoch is not None:
-            model_file = "model.pth.tar-" + str(epoch)
-
-        for name in names:
-            model_path = osp.join(directory, name, model_file)
-
-            if not osp.exists(model_path):
-                raise FileNotFoundError('Model not found at "{}"'.format(model_path))
-
-            checkpoint = load_checkpoint(model_path)
-            state_dict = checkpoint["state_dict"]
-            epoch = checkpoint["epoch"]
-
-            # Ignore fixed token vectors
-            if "token_prefix" in state_dict:
-                del state_dict["token_prefix"]
-
-            if "token_suffix" in state_dict:
-                del state_dict["token_suffix"]
-
-            print("Loading weights to {} " 'from "{}" (epoch = {})'.format(name, model_path, epoch))
-            # set strict=False
-            self._models[name].load_state_dict(state_dict, strict=False)
-    # TODO: modify save model
-    def save_model(
-        self, epoch, directory, is_best=False, val_result=None, model_name=""
-    ):
-        names = self.get_model_names()
-
-        for name in names:
-            model_dict = self._models[name].state_dict()
-
-            optim_dict = None
-            if self._optims[name] is not None:
-                optim_dict = self._optims[name].state_dict()
-
-            sched_dict = None
-            if self._scheds[name] is not None:
-                sched_dict = self._scheds[name].state_dict()
-
-            save_checkpoint(
-                {
-                    "state_dict": model_dict,
-                    "epoch": epoch + 1,
-                    "optimizer": optim_dict,
-                    "scheduler": sched_dict,
-                    "val_result": val_result
-                },
-                osp.join(directory, name),
-                is_best=is_best,
-                model_name=model_name,
-            )

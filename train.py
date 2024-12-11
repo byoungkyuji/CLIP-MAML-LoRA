@@ -26,7 +26,7 @@ import datasets.imagenet_r
 import trainers.coop
 import trainers.cocoop
 import trainers.zsclip
-
+import trainers.lora
 
 def print_args(args, cfg):
     print("***************")
@@ -87,9 +87,15 @@ def extend_cfg(cfg):
     """
     from yacs.config import CfgNode as CN
 
-    cfg.TRAINER.LORA = CN()
-    cfg.TRAINER.LORA.PREC = "fp16"  # fp16, fp32, amp
-
+    cfg.TRAINER.LoRA = CN()
+    cfg.TRAINER.LoRA.PREC = "fp16"  # fp16, fp32, amp
+    cfg.TRAINER.LoRA.POSITION="all"
+    cfg.TRAINER.LoRA.ENCODER="both"
+    cfg.TRAINER.LoRA.PARAMS=["q","k","v"]
+    cfg.TRAINER.LoRA.RANK=2
+    cfg.TRAINER.LoRA.ALPHA=1
+    cfg.TRAINER.LoRA.DROPOUT_RATE=0.25
+    cfg.TRAINER.LoRA.CTX_INIT=['a photo of a {}.']
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 
 
