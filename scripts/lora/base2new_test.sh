@@ -3,9 +3,9 @@
 cd ../..
 
 # custom config
-DATA=/path/to/datasets
-TRAINER=LORA
-# TRAINER=CoOp
+export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
+DATA=../datasets/
+TRAINER=LoRA
 
 DATASET=$1
 SEED=$2
