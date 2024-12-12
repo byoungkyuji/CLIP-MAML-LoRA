@@ -9,13 +9,13 @@ from torch.cuda.amp import GradScaler, autocast
 
 from dassl.engine import TRAINER_REGISTRY, TrainerX
 from dassl.metrics import compute_accuracy
-from dassl.utils import load_pretrained_weights, load_checkpoint
+from dassl.utils import load_pretrained_weights
 from dassl.optim import build_optimizer, build_lr_scheduler
 
 from clip import clip
 from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 
-from loralib.utils import mark_only_lora_as_trainable, apply_lora, lora_state_dict, save_lora, load_lora
+from loralib.utils import mark_only_lora_as_trainable, apply_lora
 from loralib import layers as lora_layers
 
 from typing import Dict
@@ -39,31 +39,6 @@ def load_clip_to_cpu(cfg):
 
     return model
 
-
-def evaluate_lora(clip_model, loader, dataset):
-    clip_model.eval()
-    with torch.no_grad():
-        template = dataset.template[0] 
-        texts = [template.format(classname.replace('_', ' ')) for classname in dataset.classnames]
-        with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-            texts = clip.tokenize(texts).cuda()
-            class_embeddings = clip_model.encode_text(texts)
-        text_features = class_embeddings/class_embeddings.norm(dim=-1, keepdim=True)
-
-    acc = 0.
-    tot_samples = 0
-    with torch.no_grad():
-        for i, (images, target) in enumerate(loader):
-            images, target = images.cuda(), target.cuda()
-            with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                image_features = clip_model.encode_image(images)
-            image_features = image_features/image_features.norm(dim=-1, keepdim=True)
-            cosine_similarity = image_features @ text_features.t()
-            acc += cls_acc(cosine_similarity, target) * len(cosine_similarity)
-            tot_samples += len(cosine_similarity)
-    acc /= tot_samples
-
-    return acc
 class LoRACLIP(nn.Module):
     def __init__(self, cfg, classnames, clip_model):
         super().__init__()
