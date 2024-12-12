@@ -5,3 +5,6 @@
 ## [24.12.11 20:25:00] 1. CLIP-LoRA DG trial is using Data Parallel seed 1
     * bash scripts/lora/base2new_train.sh imagenet 2
 ### base2new_train.sh, 1 batch takes about 1 minute.
+## [24.12.11 22:25:00] 1. CLIP-LoRA general is using Data Parallel seed 3
+## [24.12.12 16:50:00] 2. CLIP-LoRA genral using Data Parallel seed 1, modified HP
+    * bash scripts/lora/all2all.sh imagenet 1
