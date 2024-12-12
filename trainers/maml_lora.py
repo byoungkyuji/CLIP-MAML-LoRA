@@ -142,13 +142,13 @@ class MLoRA(TrainerX):
 
     def forward_backward(self, batch):
         """
-        Override forward_backward for meta-learning tasks using meta-dataset.
+        Override forward_backward for meta-learning tasks using LoRA parameters only.
         """
         support_set, query_set = self.parse_batch_train(batch)
 
         # Inner loop adaptation (on support set)
         support_images, support_labels = support_set["img"].to(self.device), support_set["label"].to(self.device)
-        lora_params = [p.clone().detach().requires_grad_() for p in self.model.parameters()]
+        lora_params = [p.clone().detach().requires_grad_() for p in self.model.get_lora_parameters(bias='none')]
 
         for _ in range(self.cfg.TRAINER.MAML.NUM_INNER_STEPS):
             support_output = self._forward_with_params(support_images, lora_params)
