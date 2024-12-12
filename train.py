@@ -97,7 +97,7 @@ def extend_cfg(cfg):
     cfg.TRAINER.LoRA.DROPOUT_RATE=0.25
     cfg.TRAINER.LoRA.CTX_INIT=['a photo of a {}.']
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
-
+    cfg.TEST.FINAL_MODEL = "best_val"
 
 def setup_cfg(args):
     cfg = get_cfg_default()
