@@ -102,8 +102,8 @@ class LoRA(TrainerX):
     def build_model(self):
         cfg = self.cfg
         classnames = self.dm.dataset.classnames
-        self.max_epoch = cfg.DATASET.NUM_SHOTS * 500 // len(self.train_loader_x)
-        cfg.OPTIM.MAX_EPOCH = self.max_epoch
+        # self.max_epoch = cfg.DATASET.NUM_SHOTS * 500 // len(self.train_loader_x)
+        # cfg.OPTIM.MAX_EPOCH = self.max_epoch
 
         print(f"Loading CLIP (backbone: {cfg.MODEL.BACKBONE.NAME})")
         clip_model = load_clip_to_cpu(cfg)
