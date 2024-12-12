@@ -47,7 +47,6 @@ class LoRACLIP(nn.Module):
         self.lora_encoder = cfg.TRAINER.LoRA.ENCODER
         self.image_encoder = clip_model.visual
         self.text_encoder = clip_model.transformer
-        self.logit_scale = clip_model.logit_scale
         self.dtype = clip_model.dtype
         self.template = cfg.TRAINER.LoRA.CTX_INIT
         self.clip_model = clip_model
@@ -103,7 +102,9 @@ class LoRA(TrainerX):
     def build_model(self):
         cfg = self.cfg
         classnames = self.dm.dataset.classnames
-        
+        self.max_epoch = cfg.DATASET.NUM_SHOTS * 500 // len(self.train_loader_x)
+        cfg.OPTIM.MAX_EPOCH = self.max_epoch
+
         print(f"Loading CLIP (backbone: {cfg.MODEL.BACKBONE.NAME})")
         clip_model = load_clip_to_cpu(cfg)
         

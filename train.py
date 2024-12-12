@@ -117,7 +117,7 @@ def setup_cfg(args):
     # 4. From optional input arguments
     cfg.merge_from_list(args.opts)
 
-    cfg.freeze()
+    # cfg.freeze()
 
     return cfg
 
