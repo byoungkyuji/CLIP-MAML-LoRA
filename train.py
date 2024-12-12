@@ -27,6 +27,7 @@ import trainers.coop
 import trainers.cocoop
 import trainers.zsclip
 import trainers.lora
+import trainers.maml_lora
 
 def print_args(args, cfg):
     print("***************")
