@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # custom config
-export CUDA_VISIBLE_DEVICES=1
 DATA=../datasets/
 TRAINER=LoRA
 
 DATASET=$1
 SEED=$2
+export CUDA_VISIBLE_DEVICES=$3
 
 CFG=vit_b16_ep10_batch32
 # CFG=vit_b16_ctxv1  # uncomment this when TRAINER=CoOp

@@ -45,14 +45,15 @@ class EuroSAT(DatasetBase):
             seed = cfg.SEED
             preprocessed = os.path.join(self.split_fewshot_dir, f"shot_{num_shots}-seed_{seed}.pkl")
             
-            if os.path.exists(preprocessed):
+            if False and os.path.exists(preprocessed):
                 print(f"Loading preprocessed few-shot data from {preprocessed}")
                 with open(preprocessed, "rb") as file:
                     data = pickle.load(file)
                     train, val = data["train"], data["val"]
             else:
                 train = self.generate_fewshot_dataset(train, num_shots=num_shots)
-                val = self.generate_fewshot_dataset(val, num_shots=min(num_shots, 4))
+                #val = self.generate_fewshot_dataset(val, num_shots=min(num_shots, 4))
+                val = self.generate_fewshot_dataset(val, num_shots=1e10)
                 data = {"train": train, "val": val}
                 print(f"Saving preprocessed few-shot data to {preprocessed}")
                 with open(preprocessed, "wb") as file:
