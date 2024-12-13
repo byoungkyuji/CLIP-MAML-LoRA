@@ -1,27 +1,32 @@
 import os.path as osp
 from collections import OrderedDict
 import math
-
+import time
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from torch.cuda.amp import GradScaler, autocast
-
+import datetime
 from dassl.engine import TRAINER_REGISTRY, TrainerX
 from dassl.metrics import compute_accuracy
 from dassl.utils import load_pretrained_weights, load_checkpoint
 from dassl.optim import build_optimizer, build_lr_scheduler
-
+from dassl.evaluation import build_evaluator
 from clip import clip
 from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 
 from loralib.utils import mark_only_lora_as_trainable, apply_lora
 from loralib import layers as lora_layers
-
+import numpy as np
 from typing import Dict
-
+from ray.air import Checkpoint, session,CheckpointConfig
+from ray.tune.schedulers import ASHAScheduler
 from loralib.layers import LoRALayer, PlainMultiheadAttentionLoRA
-
+from dassl.utils import (
+    MetricMeter, AverageMeter, tolist_if_not, count_num_param, load_checkpoint,
+    save_checkpoint, mkdir_if_missing, resume_from_checkpoint,
+    load_pretrained_weights
+)
 def load_clip_to_cpu(cfg):
     backbone_name = cfg.MODEL.BACKBONE.NAME
     url = clip._MODELS[backbone_name]
@@ -40,10 +45,10 @@ def load_clip_to_cpu(cfg):
     return model
 
 class LoRACLIP(nn.Module):
-    def __init__(self, cfg, classnames, clip_model):
+    def __init__(self, cfg, classnames, clip_model,hpo_cfg):
         super().__init__()
         self.classnames = classnames
-        self.list_lora_layers = apply_lora(cfg,clip_model)
+        self.list_lora_layers = apply_lora(cfg,clip_model,hpo_cfg)
         self.lora_encoder = cfg.TRAINER.LoRA.ENCODER
         self.image_encoder = clip_model.visual
         self.text_encoder = clip_model.transformer
@@ -51,7 +56,7 @@ class LoRACLIP(nn.Module):
         self.template = cfg.TRAINER.LoRA.CTX_INIT
         self.clip_model = clip_model
         self.logit_scale = clip_model.logit_scale
-            
+        
     def forward(self, images):
         template = self.template[0]
         texts = [template.format(classname.replace('_', ' ')) for classname in self.classnames]
@@ -99,49 +104,52 @@ class LoRA(TrainerX):
     def check_cfg(self, cfg):
         assert cfg.TRAINER.LoRA.PREC in ["fp16", "fp32", "amp"]
 
-    def build_model(self):
-        cfg = self.cfg
-        classnames = self.dm.dataset.classnames
-        # self.max_epoch = cfg.DATASET.NUM_SHOTS * 500 // len(self.train_loader_x)
-        # cfg.OPTIM.MAX_EPOCH = self.max_epoch
+    def build_model(self, hpo_config=None):
+        if hpo_config:
+            print("hpo_config:", hpo_config)
+            cfg = self.cfg
+            classnames = self.dm.dataset.classnames
+            # self.max_epoch = cfg.DATASET.NUM_SHOTS * 500 // len(self.train_loader_x)
+            # cfg.OPTIM.MAX_EPOCH = self.max_epoch
 
-        print(f"Loading CLIP (backbone: {cfg.MODEL.BACKBONE.NAME})")
-        clip_model = load_clip_to_cpu(cfg)
-        
-        if cfg.TRAINER.LoRA.PREC == "fp32" or cfg.TRAINER.LoRA.PREC == "amp":
-            # CLIP's default precision is fp16
-            clip_model.float()
+            print(f"Loading CLIP (backbone: {cfg.MODEL.BACKBONE.NAME})")
+            clip_model = load_clip_to_cpu(cfg)
+            
+            if cfg.TRAINER.LoRA.PREC == "fp32" or cfg.TRAINER.LoRA.PREC == "amp":
+                # CLIP's default precision is fp16
+                clip_model.float()
 
-        print("Building LoRA CLIP")
-        self.model = LoRACLIP(cfg, classnames, clip_model)
-        
-        print("Turning off gradients")
-        mark_only_lora_as_trainable(self.model)
+            print("Building LoRA CLIP")
+            
+            self.model = LoRACLIP(cfg, classnames, clip_model, hpo_config)
+            
+            print("Turning off gradients")
+            mark_only_lora_as_trainable(self.model)
 
-        # check
-        enabled = set()
-        for name, param in self.model.named_parameters():
-            if param.requires_grad:
-                enabled.add(name)
-        print(f"Parameters to be updated: {enabled}")
-        
-        if cfg.MODEL.INIT_WEIGHTS:
-            load_pretrained_weights(self.model.list_lora_layers, cfg.MODEL.INIT_WEIGHTS)
-        
-        self.model.to(self.device)
-        self.optim = build_optimizer(self.model.list_lora_layers, cfg.OPTIM)
-        self.sched = build_lr_scheduler(self.optim, cfg.OPTIM)
-        self.register_model("LoRA_layers", self.model.list_lora_layers, self.optim, self.sched)
+            # check
+            enabled = set()
+            for name, param in self.model.named_parameters():
+                if param.requires_grad:
+                    enabled.add(name)
+            print(f"Parameters to be updated: {enabled}")
+            
+            if cfg.MODEL.INIT_WEIGHTS:
+                load_pretrained_weights(self.model.list_lora_layers, cfg.MODEL.INIT_WEIGHTS)
+            
+            self.model.to(self.device)
+            self.optim = build_optimizer(self.model.list_lora_layers, cfg.OPTIM)
+            self.sched = build_lr_scheduler(self.optim, cfg.OPTIM)
+            self.register_model("LoRA_layers", self.model.list_lora_layers, self.optim, self.sched)
 
-        self.scaler = GradScaler() if cfg.TRAINER.LoRA.PREC == "amp" else None
+            self.scaler = GradScaler() if cfg.TRAINER.LoRA.PREC == "amp" else None
 
-        # Note that multi-gpu training could be slow because CLIP's size is
-        # big, which slows down the copy operation in DataParallel
-        device_count = torch.cuda.device_count()
-        #device_ids = [i for i in range(2,8)]
-        if device_count > 1:
-            print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
-            self.model = nn.DataParallel(self.model)
+            # Note that multi-gpu training could be slow because CLIP's size is
+            # big, which slows down the copy operation in DataParallel
+            device_count = torch.cuda.device_count()
+            #device_ids = [i for i in range(2,8)]
+            if device_count > 1:
+                print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
+                self.model = nn.DataParallel(self.model)
 
     def forward_backward(self, batch):
         image, label = self.parse_batch_train(batch)
@@ -203,3 +211,45 @@ class LoRA(TrainerX):
             print("Loading weights to {} " 'from "{}" (epoch = {})'.format(name, model_path, epoch))
             # set strict=False
             self._models[name].load_state_dict(state_dict, strict=False)
+            
+    def after_epoch(self):
+        last_epoch = (self.epoch + 1) == self.max_epoch
+        do_test = not self.cfg.TEST.NO_TEST
+        meet_checkpoint_freq = (
+            (self.epoch + 1) % self.cfg.TRAIN.CHECKPOINT_FREQ == 0
+            if self.cfg.TRAIN.CHECKPOINT_FREQ > 0 else False
+        )
+
+        #if do_test and self.cfg.TEST.FINAL_MODEL == "best_val":
+        curr_result = self.test(split="val")
+        self.best_result = curr_result
+        self.save_model(
+            self.epoch,
+            self.output_dir,
+            val_result=curr_result,
+            model_name="model-best.pth.tar"
+        )
+        names = self.get_model_names()
+        for name in names:
+            model_dict = self._models[name].state_dict()
+
+            optim_dict = None
+            if self._optims[name] is not None:
+                optim_dict = self._optims[name].state_dict()
+
+            sched_dict = None
+            if self._scheds[name] is not None:
+                sched_dict = self._scheds[name].state_dict()      
+        save_state =  {
+                    "state_dict": model_dict,
+                    'epoch' : self.epoch + 1,
+                    "optimizer": optim_dict,
+                    "scheduler": sched_dict,
+                    "val_result": curr_result
+                }
+        checkpoint = Checkpoint.from_dict(save_state)
+        session.report({"accuracy":curr_result},checkpoint=checkpoint)
+
+        # if meet_checkpoint_freq or last_epoch:
+        #     self.save_model(self.epoch, self.output_dir)
+        # self.save_model(self.epoch, self.output_dir)

@@ -4,7 +4,7 @@ import torch
 from dassl.utils import setup_logger, set_random_seed, collect_env_info
 from dassl.config import get_cfg_default
 from dassl.engine import build_trainer
-
+from trainers.lora import LoRA
 # custom
 import datasets.oxford_pets
 import datasets.oxford_flowers
@@ -27,7 +27,12 @@ import trainers.coop
 import trainers.cocoop
 import trainers.zsclip
 import trainers.lora
-
+from dassl.evaluation import build_evaluator
+from ray import tune
+from ray.air import Checkpoint, session,CheckpointConfig
+from ray.tune.schedulers import ASHAScheduler
+from ray.tune.schedulers.pb2 import PB2
+from functools import partial
 def print_args(args, cfg):
     print("***************")
     print("** Arguments **")
@@ -121,13 +126,17 @@ def setup_cfg(args):
 
     return cfg
 
+def train_hpo(trainer,cfg,config):
+    trainer.build_model(config)
+    trainer.evaluator = build_evaluator(cfg, lab2cname=trainer.lab2cname)
+    trainer.train()
 
 def main(args):
     cfg = setup_cfg(args)
     if cfg.SEED >= 0:
         print("Setting fixed seed: {}".format(cfg.SEED))
         set_random_seed(cfg.SEED)
-    setup_logger(cfg.OUTPUT_DIR)
+    #setup_logger(cfg.OUTPUT_DIR)
 
     if torch.cuda.is_available() and cfg.USE_CUDA:
         torch.backends.cudnn.benchmark = True
@@ -135,7 +144,6 @@ def main(args):
     print_args(args, cfg)
     print("Collecting env info ...")
     print("** System info **\n{}\n".format(collect_env_info()))
-
     trainer = build_trainer(cfg)
 
     if args.eval_only:
@@ -144,8 +152,40 @@ def main(args):
         return
 
     if not args.no_train:
-        trainer.train()
+        #trainer.train()
+        
+        config = {
+        "r":tune.choice([2,16,32]),
+        "dropout_rate":tune.choice([0.25,0.5]),
+        "params":tune.choice([["q"],["k"],["v"],["o"],["q","v"],["q","k","v"],["q","v","k","o"]])
+        }
 
+        scheduler = ASHAScheduler(
+            time_attr='training_iteration',
+            metric="accuracy",
+            mode="max",
+            max_t=cfg.OPTIM.MAX_EPOCH,
+            grace_period=2,
+            reduction_factor=4,
+        )
+        # scheduler = PB2(
+        # time_attr='training_iteration',
+        # metric="accuracy",
+        # mode="max",
+        # perturbation_interval=5,
+        # hyperparam_bounds={"lr": [1e-4, 1e-2 ]},
+        # )
+        result = tune.run(
+            partial(train_hpo,trainer, cfg),
+            resources_per_trial={"cpu": 8, "gpu": 0.5},
+            config=config,
+            num_samples=16,
+            scheduler=scheduler,
+            checkpoint_config=CheckpointConfig(num_to_keep = 1, checkpoint_score_attribute="accuracy",checkpoint_score_order ="max")
+        )
+        best_trial = result.get_best_trial("accuracy", "max", "last")
+        print(f"Best trial config: {best_trial.config}")
+        print(f"Best trial final validation accuracy: {best_trial.last_result['accuracy']}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

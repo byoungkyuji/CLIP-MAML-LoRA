@@ -83,7 +83,7 @@ def lora_state_dict(model: nn.Module, bias: str = 'none') -> Dict[str, torch.Ten
         raise NotImplementedError
 
 
-def apply_lora(cfg, clip_model):
+def apply_lora(cfg, clip_model,hpo_cfg):
     list_lora_layers = []
     if cfg.TRAINER.LoRA.ENCODER == 'text' or cfg.TRAINER.LoRA.ENCODER == 'both':
         indices = INDEX_POSITIONS_TEXT[cfg.TRAINER.LoRA.POSITION]
@@ -94,7 +94,7 @@ def apply_lora(cfg, clip_model):
                 for name, submodule in block.named_children():
                     if isinstance(submodule, nn.MultiheadAttention):
                         new_multi_head_lora = PlainMultiheadAttentionLoRA(
-                            submodule, enable_lora=cfg.TRAINER.LoRA.PARAMS, r=cfg.TRAINER.LoRA.RANK, lora_alpha=cfg.TRAINER.LoRA.ALPHA, dropout_rate=cfg.TRAINER.LoRA.DROPOUT_RATE)
+                            submodule, enable_lora=hpo_cfg["params"], r=hpo_cfg["r"], lora_alpha=cfg.TRAINER.LoRA.ALPHA, dropout_rate=hpo_cfg["dropout_rate"])
                         setattr(block, name, new_multi_head_lora)
                         list_lora_layers.append(new_multi_head_lora)
 
@@ -107,7 +107,7 @@ def apply_lora(cfg, clip_model):
                 for name, submodule in block.named_children():
                     if isinstance(submodule, nn.MultiheadAttention):
                         new_multi_head_lora = PlainMultiheadAttentionLoRA(
-                            submodule, enable_lora=cfg.TRAINER.LoRA.PARAMS, r=cfg.TRAINER.LoRA.RANK, lora_alpha=cfg.TRAINER.LoRA.ALPHA, dropout_rate=cfg.TRAINER.LoRA.DROPOUT_RATE)
+                            submodule, enable_lora=hpo_cfg["params"], r=hpo_cfg["r"], lora_alpha=cfg.TRAINER.LoRA.ALPHA, dropout_rate=hpo_cfg["dropout_rate"])
                         setattr(block, name, new_multi_head_lora)
                         list_lora_layers.append(new_multi_head_lora)
     return nn.ModuleList(list_lora_layers)
