@@ -187,8 +187,8 @@ class LoRA(TrainerX):
         # By default, the best model is loaded
         model_file = "model-best.pth.tar"
 
-        if epoch is not None:
-            model_file = "model.pth.tar-" + str(epoch)
+        # if epoch is not None:
+        #     model_file = "model.pth.tar-" + str(epoch)
 
         for name in names:
             model_path = osp.join(directory, name, model_file)

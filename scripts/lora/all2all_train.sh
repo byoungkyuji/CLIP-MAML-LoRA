@@ -9,10 +9,10 @@ DATASET=$1
 SEED=$2
 export CUDA_VISIBLE_DEVICES=$3
 
-CFG=vit_b16_ep10_batch32
+CFG=vit_b16_ep30_batch32
 # CFG=vit_b16_ctxv1  # uncomment this when TRAINER=CoOp
 # CFG=vit_b16_ep50_ctxv1  # uncomment this when TRAINER=CoOp and DATASET=imagenet
-SHOTS=16
+SHOTS=4
 
 
 DIR=output/all2all/train_basebestval/${DATASET}/shots_${SHOTS}/${TRAINER}/${CFG}/seed${SEED}
